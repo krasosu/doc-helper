@@ -2,6 +2,7 @@
   "name": "simple-word-download-app",
   "version": "1.0.0",
   "private": true,
+  "type": "module",
   "scripts": {
     "build": "tsc",
     "start": "node dist/server.js"

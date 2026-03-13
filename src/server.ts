@@ -2,6 +2,10 @@ import express from "express";
 import path from "node:path";
 import { existsSync } from "node:fs";
 import { spawn } from "node:child_process";
+import { fileURLToPath } from "node:url";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const app = express();
 const PORT = process.env.PORT ?? 3000;
@@ -32,7 +36,7 @@ app.post("/api/open-document", (_req, res) => {
   res.json({ ok: true });
 });
 
-app.get("*", (_req, res) => {
+app.get("/", (_req, res) => {
   res.sendFile(path.join(rootDir, "index.html"));
 });
 
