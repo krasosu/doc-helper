@@ -49,7 +49,8 @@ function downloadDocument(urlString) {
     req.on("error", reject);
   }).then((buffer) => {
     const tmpDir = mkdtempSync(path.join(os.tmpdir(), "doc-open-"));
-    const filePath = path.join(tmpDir, "document.docx");
+    const ext = path.extname(url.pathname) || ".bin";
+    const filePath = path.join(tmpDir, `download${ext}`);
     writeFileSync(filePath, buffer);
     return filePath;
   });
