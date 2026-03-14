@@ -7,7 +7,7 @@ Systems.
 ### Funktionsweise
 
 - Der Helper lauscht auf `http://localhost:17865/open-document`.
-- Die Web-Anwendung schickt einen `POST`-Request mit JSON-Body:
+- Die Web-Anwendung schickt einen `POST`-Request mit JSON-Body, z. B.:
 
   ```json
   {
@@ -15,8 +15,19 @@ Systems.
   }
   ```
 
-- Der Helper lädt die Datei von dieser URL herunter, speichert sie temporär
-  und öffnet sie mit dem Standardprogramm:
+  oder
+
+  ```json
+  {
+    "url": "http://dein-server:3000/static/audio.wav"
+  }
+  ```
+
+- Die Web-App selbst holt diese Dateien typischerweise aus einem
+  S3-kompatiblen Storage (lokal: MinIO) und stellt sie unter `/static/...`
+  bereit.
+- Der Helper lädt die Datei von der angegebenen URL, speichert sie temporär
+  mit passender Dateiendung und öffnet sie mit dem Standardprogramm:
   - Windows: `start`
   - Linux: `xdg-open`
   - macOS (falls verwendet): `open`
@@ -89,5 +100,4 @@ erforderlich.
 
    Solange dieses Fenster geöffnet bleibt, kann die Web-Anwendung den Helper
    nutzen und Dokumente lokal im Standardprogramm öffnen.
-
 

@@ -1,30 +1,62 @@
-var _a;
+var _a, _b, _c, _d, _e, _f;
 import express from "express";
 import path from "node:path";
-import { existsSync } from "node:fs";
-import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { S3Client, GetObjectCommand } from "@aws-sdk/client-s3";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const app = express();
 const PORT = (_a = process.env.PORT) !== null && _a !== void 0 ? _a : 3000;
 const rootDir = path.join(__dirname, "..");
-app.use(express.static(rootDir));
-app.post("/api/open-document", (_req, res) => {
-    const docPath = path.join(rootDir, "static", "document.docx");
-    if (!existsSync(docPath)) {
-        res.status(404).json({ ok: false, message: "Datei nicht gefunden." });
-        return;
+const s3Endpoint = (_b = process.env.MINIO_ENDPOINT) !== null && _b !== void 0 ? _b : "http://localhost:9000";
+const s3Region = (_c = process.env.MINIO_REGION) !== null && _c !== void 0 ? _c : "us-east-1";
+const s3Bucket = (_d = process.env.MINIO_BUCKET) !== null && _d !== void 0 ? _d : "documents";
+const s3AccessKey = (_e = process.env.MINIO_ACCESS_KEY) !== null && _e !== void 0 ? _e : "minioadmin";
+const s3SecretKey = (_f = process.env.MINIO_SECRET_KEY) !== null && _f !== void 0 ? _f : "minioadmin";
+const s3Client = new S3Client({
+    endpoint: s3Endpoint,
+    region: s3Region,
+    credentials: {
+        accessKeyId: s3AccessKey,
+        secretAccessKey: s3SecretKey,
+    },
+    forcePathStyle: true,
+});
+app.get("/static/:key", async (req, res) => {
+    var _a;
+    const { key } = req.params;
+    try {
+        const command = new GetObjectCommand({
+            Bucket: s3Bucket,
+            Key: key,
+        });
+        const data = await s3Client.send(command);
+        const contentType = (_a = data.ContentType) !== null && _a !== void 0 ? _a : (key.endsWith(".docx")
+            ? "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            : key.endsWith(".wav")
+                ? "audio/wav"
+                : "application/octet-stream");
+        res.setHeader("Content-Type", contentType);
+        const body = data.Body;
+        if (!body) {
+            res.status(500).send("Kein Inhalt erhalten");
+            return;
+        }
+        body.on("error", (err) => {
+            console.error("Fehler beim Streamen aus MinIO:", err);
+            if (!res.headersSent) {
+                res.status(500).send("Fehler beim Streamen der Datei");
+            }
+            else {
+                res.end();
+            }
+        });
+        body.pipe(res);
     }
-    const opener = spawn("xdg-open", [docPath], {
-        detached: true,
-        stdio: "ignore",
-    });
-    opener.on("error", (err) => {
-        console.error("Fehler beim Öffnen der Datei:", err);
-    });
-    opener.unref();
-    res.json({ ok: true });
+    catch (error) {
+        console.error("Fehler beim Laden aus MinIO:", error);
+        res.status(404).send("Datei nicht gefunden");
+    }
 });
 app.get("/", (_req, res) => {
     res.sendFile(path.join(rootDir, "index.html"));
