@@ -59,7 +59,7 @@ function downloadDocument(urlString) {
 function startSyncToServer(filePath, downloadUrl) {
   const urlObj = new URL(downloadUrl);
   const baseUrl = urlObj.origin;
-  const key = path.basename(urlObj.pathname);
+  const key = urlObj.pathname.replace(/^\/static\/?/, "") || path.basename(filePath);
 
   let debounceTimer = null;
   const debounceMs = 2000;

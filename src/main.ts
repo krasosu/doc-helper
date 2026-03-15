@@ -28,36 +28,52 @@ async function triggerHelperOrDownload(url: string) {
   }
 }
 
-function setupDownloadButtons() {
-  const wordButton = document.getElementById("download-word-button") as
-    | HTMLButtonElement
-    | null;
-  const audioButton = document.getElementById("download-audio-button") as
-    | HTMLButtonElement
-    | null;
+function renderFileList(files: string[]) {
+  const container = document.getElementById("file-list");
+  const emptyEl = document.getElementById("file-list-empty");
 
-  if (!wordButton) {
-    console.warn(
-      "Download-Button mit ID 'download-word-button' wurde nicht gefunden.",
-    );
-  } else {
-    wordButton.addEventListener("click", async () => {
-      const documentUrl = `${window.location.origin}/static/document.docx`;
-      await triggerHelperOrDownload(documentUrl);
-    });
+  if (!container) return;
+
+  container.innerHTML = "";
+
+  if (files.length === 0) {
+    if (emptyEl) emptyEl.style.display = "block";
+    return;
   }
 
-  if (!audioButton) {
-    console.warn(
-      "Download-Button mit ID 'download-audio-button' wurde nicht gefunden.",
-    );
-  } else {
-    audioButton.addEventListener("click", async () => {
-      const audioUrl = `${window.location.origin}/static/audio.wav`;
-      await triggerHelperOrDownload(audioUrl);
+  if (emptyEl) emptyEl.style.display = "none";
+
+  const baseUrl = window.location.origin;
+  files.forEach((key, i) => {
+    if (i > 0) {
+      const spacer = document.createElement("div");
+      spacer.style.height = "0.75rem";
+      container.appendChild(spacer);
+    }
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.textContent = key;
+    btn.addEventListener("click", () => {
+      const url = `${baseUrl}/static/${key.split("/").map(encodeURIComponent).join("/")}`;
+      triggerHelperOrDownload(url);
     });
+    container.appendChild(btn);
+  });
+}
+
+async function loadFileList() {
+  const container = document.getElementById("file-list");
+  if (!container) return;
+
+  try {
+    const res = await fetch("/api/files");
+    const data = (await res.json()) as { files?: string[] };
+    const files = Array.isArray(data.files) ? data.files : [];
+    renderFileList(files);
+  } catch (error) {
+    console.error("Dateiliste konnte nicht geladen werden:", error);
+    renderFileList([]);
   }
 }
 
-document.addEventListener("DOMContentLoaded", setupDownloadButtons);
-
+document.addEventListener("DOMContentLoaded", loadFileList);

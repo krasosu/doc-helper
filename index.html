@@ -73,15 +73,11 @@
   <body>
     <main class="card">
       <h1>Dateien herunterladen</h1>
-      <p>Wähle aus, welche Datei lokal geöffnet werden soll.</p>
-
-      <button id="download-word-button" type="button">
-        Word-Datei herunterladen
-      </button>
-      <div style="height: 0.75rem"></div>
-      <button id="download-audio-button" type="button">
-        Audio (.wav) herunterladen
-      </button>
+      <p>Wähle eine Datei zum Öffnen oder Herunterladen.</p>
+      <div id="file-list"></div>
+      <p id="file-list-empty" class="hint" style="display: none;">
+        Keine Dateien im Bucket. In MinIO unter Bucket „documents“ Dateien hochladen.
+      </p>
     </main>
 
     <script src="dist/main.js" type="module"></script>

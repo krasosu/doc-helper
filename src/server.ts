@@ -2,7 +2,12 @@ import express from "express";
 import path from "node:path";
 import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { S3Client, GetObjectCommand, PutObjectCommand } from "@aws-sdk/client-s3";
+import {
+  S3Client,
+  GetObjectCommand,
+  PutObjectCommand,
+  ListObjectsV2Command,
+} from "@aws-sdk/client-s3";
 import type { Readable } from "node:stream";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -38,13 +43,7 @@ function sendFileFromMinIO(key: string, res: express.Response): Promise<boolean>
 
     const data = await s3Client.send(command);
 
-    const contentType =
-      data.ContentType ??
-      (key.endsWith(".docx")
-        ? "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-        : key.endsWith(".wav")
-          ? "audio/wav"
-          : "application/octet-stream");
+    const contentType = data.ContentType ?? "application/octet-stream";
 
     res.setHeader("Content-Type", contentType);
     res.setHeader("Content-Disposition", `attachment; filename="${key}"`);
@@ -69,8 +68,8 @@ function sendFileFromMinIO(key: string, res: express.Response): Promise<boolean>
   })();
 }
 
-app.get("/static/:key", async (req, res) => {
-  const { key } = req.params;
+app.get(/^\/static\/(.+)$/, async (req, res) => {
+  const key = (req.params as { 0: string })[0];
 
   try {
     await sendFileFromMinIO(key, res);
@@ -85,16 +84,41 @@ app.get("/static/:key", async (req, res) => {
       );
       res.sendFile(localPath);
     } else {
-      res.status(404).send("Datei nicht gefunden. MinIO-Bucket 'documents' prüfen und " + key + " hochladen.");
+      res.status(404).send("Datei nicht gefunden. MinIO-Bucket prüfen und " + key + " hochladen.");
     }
   }
 });
 
+app.get("/api/files", async (_req, res) => {
+  try {
+    const list: string[] = [];
+    let continuationToken: string | undefined;
+
+    do {
+      const result = await s3Client.send(
+        new ListObjectsV2Command({
+          Bucket: s3Bucket,
+          ContinuationToken: continuationToken,
+        }),
+      );
+      for (const obj of result.Contents ?? []) {
+        if (obj.Key) list.push(obj.Key);
+      }
+      continuationToken = result.IsTruncated ? result.NextContinuationToken : undefined;
+    } while (continuationToken);
+
+    res.json({ files: list });
+  } catch (error) {
+    console.error("Fehler beim Listen aus MinIO:", error);
+    res.status(500).json({ files: [] });
+  }
+});
+
 app.put(
-  "/api/static/:key",
+  /^\/api\/static\/(.+)$/,
   express.raw({ type: "*/*", limit: "50mb" }),
   async (req, res) => {
-    const key = req.params.key;
+    const key = (req.params as { 0: string })[0];
     const body = req.body as Buffer | undefined;
 
     if (!body || !Buffer.isBuffer(body)) {
