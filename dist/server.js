@@ -3,7 +3,7 @@ import express from "express";
 import path from "node:path";
 import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { S3Client, GetObjectCommand } from "@aws-sdk/client-s3";
+import { S3Client, GetObjectCommand, PutObjectCommand } from "@aws-sdk/client-s3";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const app = express();
@@ -71,6 +71,26 @@ app.get("/static/:key", async (req, res) => {
         else {
             res.status(404).send("Datei nicht gefunden. MinIO-Bucket 'documents' prüfen und " + key + " hochladen.");
         }
+    }
+});
+app.put("/api/static/:key", express.raw({ type: "*/*", limit: "50mb" }), async (req, res) => {
+    const key = req.params.key;
+    const body = req.body;
+    if (!body || !Buffer.isBuffer(body)) {
+        res.status(400).send("Kein Dateiinhalt");
+        return;
+    }
+    try {
+        await s3Client.send(new PutObjectCommand({
+            Bucket: s3Bucket,
+            Key: key,
+            Body: body,
+        }));
+        res.status(200).json({ ok: true });
+    }
+    catch (error) {
+        console.error("Fehler beim Schreiben nach MinIO:", error);
+        res.status(500).json({ ok: false, message: "Upload fehlgeschlagen" });
     }
 });
 app.get("/", (_req, res) => {
