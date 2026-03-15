@@ -32,6 +32,11 @@ Systems.
   - Linux: `xdg-open`
   - macOS (falls verwendet): `open`
 
+- **Sync zurück nach MinIO:** Nach dem Öffnen beobachtet der Helper die
+  temporäre Datei. Speicherst du sie im Programm (z. B. Word), wird die
+  geänderte Datei nach einer kurzen Verzögerung (2 Sek.) automatisch per
+  `PUT /api/static/:key` an den Server geschickt und in MinIO überschrieben.
+
 ### Start (Linux & Windows, mit installiertem Node.js)
 
 1. In dieses Verzeichnis wechseln:

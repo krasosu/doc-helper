@@ -1,7 +1,7 @@
 import http from "node:http";
 import https from "node:https";
 import { spawn } from "node:child_process";
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { mkdtempSync, writeFileSync, watch, readFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
@@ -59,6 +59,44 @@ async function downloadDocument(urlString) {
   return filePath;
 }
 
+function startSyncToServer(filePath, downloadUrl) {
+  const urlObj = new URL(downloadUrl);
+  const baseUrl = urlObj.origin;
+  const key = path.basename(urlObj.pathname);
+
+  let debounceTimer = null;
+  const debounceMs = 2000;
+
+  function uploadToServer() {
+    try {
+      const buffer = readFileSync(filePath);
+      const apiUrl = `${baseUrl}/api/static/${key}`;
+      fetch(apiUrl, {
+        method: "PUT",
+        body: buffer,
+        headers: { "Content-Type": "application/octet-stream" },
+      })
+        .then((r) => {
+          if (r.ok) console.log(`Sync nach MinIO: ${key}`);
+          else console.warn(`Sync fehlgeschlagen: ${key}`, r.status);
+        })
+        .catch((err) => console.warn("Sync-Fehler:", err));
+    } catch (err) {
+      console.warn("Datei lesen für Sync:", err);
+    }
+  }
+
+  try {
+    watch(filePath, (eventType, filename) => {
+      if (debounceTimer) clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(uploadToServer, debounceMs);
+    });
+    console.log(`Sync aktiv: Änderungen an der Datei werden nach MinIO geschrieben (${key})`);
+  } catch (err) {
+    console.warn("Watcher konnte nicht gestartet werden:", err);
+  }
+}
+
 const server = http.createServer(async (req, res) => {
   // CORS für Browser
   res.setHeader("Access-Control-Allow-Origin", "*");
@@ -95,6 +133,7 @@ const server = http.createServer(async (req, res) => {
 
           const filePath = await downloadDocument(url);
           openFileWithDefaultApp(filePath);
+          startSyncToServer(filePath, url);
 
           res.writeHead(200, { "Content-Type": "application/json" });
           res.end(JSON.stringify({ ok: true }));

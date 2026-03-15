@@ -1,7 +1,7 @@
 const http = require("http");
 const https = require("https");
 const { spawn } = require("child_process");
-const { mkdtempSync, writeFileSync } = require("fs");
+const { mkdtempSync, writeFileSync, watch, readFileSync } = require("fs");
 const os = require("os");
 const path = require("path");
 
@@ -56,6 +56,46 @@ function downloadDocument(urlString) {
   });
 }
 
+function startSyncToServer(filePath, downloadUrl) {
+  const urlObj = new URL(downloadUrl);
+  const baseUrl = urlObj.origin;
+  const key = path.basename(urlObj.pathname);
+
+  let debounceTimer = null;
+  const debounceMs = 2000;
+
+  function uploadToServer() {
+    try {
+      const buffer = readFileSync(filePath);
+      const apiUrl = baseUrl + "/api/static/" + key;
+      fetch(apiUrl, {
+        method: "PUT",
+        body: buffer,
+        headers: { "Content-Type": "application/octet-stream" },
+      })
+        .then(function (r) {
+          if (r.ok) console.log("Sync nach MinIO: " + key);
+          else console.warn("Sync fehlgeschlagen: " + key, r.status);
+        })
+        .catch(function (err) {
+          console.warn("Sync-Fehler:", err);
+        });
+    } catch (err) {
+      console.warn("Datei lesen für Sync:", err);
+    }
+  }
+
+  try {
+    watch(filePath, function (eventType, filename) {
+      if (debounceTimer) clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(uploadToServer, debounceMs);
+    });
+    console.log("Sync aktiv: Änderungen an der Datei werden nach MinIO geschrieben (" + key + ")");
+  } catch (err) {
+    console.warn("Watcher konnte nicht gestartet werden:", err);
+  }
+}
+
 const server = http.createServer((req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
@@ -91,6 +131,7 @@ const server = http.createServer((req, res) => {
         downloadDocument(url)
           .then((filePath) => {
             openFileWithDefaultApp(filePath);
+            startSyncToServer(filePath, url);
             res.writeHead(200, { "Content-Type": "application/json" });
             res.end(JSON.stringify({ ok: true }));
           })
