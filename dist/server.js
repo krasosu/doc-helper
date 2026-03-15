@@ -3,7 +3,7 @@ import express from "express";
 import path from "node:path";
 import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { S3Client, GetObjectCommand, PutObjectCommand } from "@aws-sdk/client-s3";
+import { S3Client, GetObjectCommand, PutObjectCommand, ListObjectsV2Command, } from "@aws-sdk/client-s3";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const app = express();
@@ -31,11 +31,7 @@ function sendFileFromMinIO(key, res) {
             Key: key,
         });
         const data = await s3Client.send(command);
-        const contentType = (_a = data.ContentType) !== null && _a !== void 0 ? _a : (key.endsWith(".docx")
-            ? "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-            : key.endsWith(".wav")
-                ? "audio/wav"
-                : "application/octet-stream");
+        const contentType = (_a = data.ContentType) !== null && _a !== void 0 ? _a : "application/octet-stream";
         res.setHeader("Content-Type", contentType);
         res.setHeader("Content-Disposition", `attachment; filename="${key}"`);
         const body = data.Body;
@@ -56,8 +52,8 @@ function sendFileFromMinIO(key, res) {
         return true;
     })();
 }
-app.get("/static/:key", async (req, res) => {
-    const { key } = req.params;
+app.get(/^\/static\/(.+)$/, async (req, res) => {
+    const key = req.params[0];
     try {
         await sendFileFromMinIO(key, res);
     }
@@ -69,12 +65,35 @@ app.get("/static/:key", async (req, res) => {
             res.sendFile(localPath);
         }
         else {
-            res.status(404).send("Datei nicht gefunden. MinIO-Bucket 'documents' prüfen und " + key + " hochladen.");
+            res.status(404).send("Datei nicht gefunden. MinIO-Bucket prüfen und " + key + " hochladen.");
         }
     }
 });
-app.put("/api/static/:key", express.raw({ type: "*/*", limit: "50mb" }), async (req, res) => {
-    const key = req.params.key;
+app.get("/api/files", async (_req, res) => {
+    var _a;
+    try {
+        const list = [];
+        let continuationToken;
+        do {
+            const result = await s3Client.send(new ListObjectsV2Command({
+                Bucket: s3Bucket,
+                ContinuationToken: continuationToken,
+            }));
+            for (const obj of (_a = result.Contents) !== null && _a !== void 0 ? _a : []) {
+                if (obj.Key)
+                    list.push(obj.Key);
+            }
+            continuationToken = result.IsTruncated ? result.NextContinuationToken : undefined;
+        } while (continuationToken);
+        res.json({ files: list });
+    }
+    catch (error) {
+        console.error("Fehler beim Listen aus MinIO:", error);
+        res.status(500).json({ files: [] });
+    }
+});
+app.put(/^\/api\/static\/(.+)$/, express.raw({ type: "*/*", limit: "50mb" }), async (req, res) => {
+    const key = req.params[0];
     const body = req.body;
     if (!body || !Buffer.isBuffer(body)) {
         res.status(400).send("Kein Dateiinhalt");

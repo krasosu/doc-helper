@@ -28,26 +28,49 @@ async function triggerHelperOrDownload(url) {
         document.body.removeChild(link);
     }
 }
-function setupDownloadButtons() {
-    const wordButton = document.getElementById("download-word-button");
-    const audioButton = document.getElementById("download-audio-button");
-    if (!wordButton) {
-        console.warn("Download-Button mit ID 'download-word-button' wurde nicht gefunden.");
+function renderFileList(files) {
+    const container = document.getElementById("file-list");
+    const emptyEl = document.getElementById("file-list-empty");
+    if (!container)
+        return;
+    container.innerHTML = "";
+    if (files.length === 0) {
+        if (emptyEl)
+            emptyEl.style.display = "block";
+        return;
     }
-    else {
-        wordButton.addEventListener("click", async () => {
-            const documentUrl = `${window.location.origin}/static/document.docx`;
-            await triggerHelperOrDownload(documentUrl);
+    if (emptyEl)
+        emptyEl.style.display = "none";
+    const baseUrl = window.location.origin;
+    files.forEach((key, i) => {
+        if (i > 0) {
+            const spacer = document.createElement("div");
+            spacer.style.height = "0.75rem";
+            container.appendChild(spacer);
+        }
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.textContent = key;
+        btn.addEventListener("click", () => {
+            const url = `${baseUrl}/static/${key.split("/").map(encodeURIComponent).join("/")}`;
+            triggerHelperOrDownload(url);
         });
+        container.appendChild(btn);
+    });
+}
+async function loadFileList() {
+    const container = document.getElementById("file-list");
+    if (!container)
+        return;
+    try {
+        const res = await fetch("/api/files");
+        const data = (await res.json());
+        const files = Array.isArray(data.files) ? data.files : [];
+        renderFileList(files);
     }
-    if (!audioButton) {
-        console.warn("Download-Button mit ID 'download-audio-button' wurde nicht gefunden.");
-    }
-    else {
-        audioButton.addEventListener("click", async () => {
-            const audioUrl = `${window.location.origin}/static/audio.wav`;
-            await triggerHelperOrDownload(audioUrl);
-        });
+    catch (error) {
+        console.error("Dateiliste konnte nicht geladen werden:", error);
+        renderFileList([]);
     }
 }
-document.addEventListener("DOMContentLoaded", setupDownloadButtons);
+document.addEventListener("DOMContentLoaded", loadFileList);
