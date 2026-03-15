@@ -1,6 +1,7 @@
 var _a, _b, _c, _d, _e, _f;
 import express from "express";
 import path from "node:path";
+import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { S3Client, GetObjectCommand } from "@aws-sdk/client-s3";
 const __filename = fileURLToPath(import.meta.url);
@@ -22,10 +23,9 @@ const s3Client = new S3Client({
     },
     forcePathStyle: true,
 });
-app.get("/static/:key", async (req, res) => {
-    var _a;
-    const { key } = req.params;
-    try {
+function sendFileFromMinIO(key, res) {
+    return (async () => {
+        var _a;
         const command = new GetObjectCommand({
             Bucket: s3Bucket,
             Key: key,
@@ -37,10 +37,11 @@ app.get("/static/:key", async (req, res) => {
                 ? "audio/wav"
                 : "application/octet-stream");
         res.setHeader("Content-Type", contentType);
+        res.setHeader("Content-Disposition", `attachment; filename="${key}"`);
         const body = data.Body;
         if (!body) {
             res.status(500).send("Kein Inhalt erhalten");
-            return;
+            return true;
         }
         body.on("error", (err) => {
             console.error("Fehler beim Streamen aus MinIO:", err);
@@ -52,15 +53,30 @@ app.get("/static/:key", async (req, res) => {
             }
         });
         body.pipe(res);
+        return true;
+    })();
+}
+app.get("/static/:key", async (req, res) => {
+    const { key } = req.params;
+    try {
+        await sendFileFromMinIO(key, res);
     }
     catch (error) {
         console.error("Fehler beim Laden aus MinIO:", error);
-        res.status(404).send("Datei nicht gefunden");
+        const localPath = path.join(rootDir, "static", key);
+        if (existsSync(localPath)) {
+            res.setHeader("Content-Disposition", `attachment; filename="${path.basename(key)}"`);
+            res.sendFile(localPath);
+        }
+        else {
+            res.status(404).send("Datei nicht gefunden. MinIO-Bucket 'documents' prüfen und " + key + " hochladen.");
+        }
     }
 });
 app.get("/", (_req, res) => {
     res.sendFile(path.join(rootDir, "index.html"));
 });
+app.use(express.static(rootDir));
 app.listen(PORT, () => {
     console.log(`Server läuft auf http://localhost:${PORT}`);
 });
