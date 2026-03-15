@@ -9,7 +9,7 @@ async function triggerHelperOrDownload(url) {
             body: JSON.stringify({ url }),
         });
         if (!response.ok) {
-            console.warn("Lokaler Helper konnte die Datei nicht öffnen, falle auf Download zurück.");
+            console.warn("Helper could not open file, falling back to download.");
             const link = document.createElement("a");
             link.href = url;
             link.download = "";
@@ -19,7 +19,7 @@ async function triggerHelperOrDownload(url) {
         }
     }
     catch (error) {
-        console.warn("Client-Helper nicht erreichbar, starte normalen Download.", error);
+        console.warn("Helper not reachable, using normal download.", error);
         const link = document.createElement("a");
         link.href = url;
         link.download = "";
@@ -69,7 +69,7 @@ async function loadFileList() {
         renderFileList(files);
     }
     catch (error) {
-        console.error("Dateiliste konnte nicht geladen werden:", error);
+        console.error("Could not load file list:", error);
         renderFileList([]);
     }
 }

@@ -36,13 +36,13 @@ function sendFileFromMinIO(key, res) {
         res.setHeader("Content-Disposition", `attachment; filename="${key}"`);
         const body = data.Body;
         if (!body) {
-            res.status(500).send("Kein Inhalt erhalten");
+            res.status(500).send("No content received");
             return true;
         }
         body.on("error", (err) => {
-            console.error("Fehler beim Streamen aus MinIO:", err);
+            console.error("Error streaming from MinIO:", err);
             if (!res.headersSent) {
-                res.status(500).send("Fehler beim Streamen der Datei");
+                res.status(500).send("Error streaming file");
             }
             else {
                 res.end();
@@ -58,14 +58,14 @@ app.get(/^\/static\/(.+)$/, async (req, res) => {
         await sendFileFromMinIO(key, res);
     }
     catch (error) {
-        console.error("Fehler beim Laden aus MinIO:", error);
+        console.error("Error loading from MinIO:", error);
         const localPath = path.join(rootDir, "static", key);
         if (existsSync(localPath)) {
             res.setHeader("Content-Disposition", `attachment; filename="${path.basename(key)}"`);
             res.sendFile(localPath);
         }
         else {
-            res.status(404).send("Datei nicht gefunden. MinIO-Bucket prüfen und " + key + " hochladen.");
+            res.status(404).send("File not found. Check bucket and upload: " + key);
         }
     }
 });
@@ -88,7 +88,7 @@ app.get("/api/files", async (_req, res) => {
         res.json({ files: list });
     }
     catch (error) {
-        console.error("Fehler beim Listen aus MinIO:", error);
+        console.error("Error listing from MinIO:", error);
         res.status(500).json({ files: [] });
     }
 });
@@ -96,7 +96,7 @@ app.put(/^\/api\/static\/(.+)$/, express.raw({ type: "*/*", limit: "50mb" }), as
     const key = req.params[0];
     const body = req.body;
     if (!body || !Buffer.isBuffer(body)) {
-        res.status(400).send("Kein Dateiinhalt");
+        res.status(400).send("No file content");
         return;
     }
     try {
@@ -108,8 +108,8 @@ app.put(/^\/api\/static\/(.+)$/, express.raw({ type: "*/*", limit: "50mb" }), as
         res.status(200).json({ ok: true });
     }
     catch (error) {
-        console.error("Fehler beim Schreiben nach MinIO:", error);
-        res.status(500).json({ ok: false, message: "Upload fehlgeschlagen" });
+        console.error("Error writing to MinIO:", error);
+        res.status(500).json({ ok: false, message: "Upload failed" });
     }
 });
 app.get("/", (_req, res) => {
@@ -117,5 +117,5 @@ app.get("/", (_req, res) => {
 });
 app.use(express.static(rootDir));
 app.listen(PORT, () => {
-    console.log(`Server läuft auf http://localhost:${PORT}`);
+    console.log("Server running at http://localhost:" + PORT);
 });

@@ -37,7 +37,7 @@ async function downloadDocument(urlString) {
       if (res.statusCode && res.statusCode >= 400) {
         reject(
           new Error(
-            `Download fehlgeschlagen: ${res.statusCode} ${res.statusMessage ?? ""}`,
+            `Download failed: ${res.statusCode} ${res.statusMessage ?? ""}`,
           ),
         );
         return;
@@ -77,12 +77,12 @@ function startSyncToServer(filePath, downloadUrl) {
         headers: { "Content-Type": "application/octet-stream" },
       })
         .then((r) => {
-          if (r.ok) console.log(`Sync nach MinIO: ${key}`);
-          else console.warn(`Sync fehlgeschlagen: ${key}`, r.status);
+          if (r.ok) console.log("Synced to MinIO:", key);
+          else console.warn("Sync failed:", key, r.status);
         })
-        .catch((err) => console.warn("Sync-Fehler:", err));
+        .catch((err) => console.warn("Sync error:", err));
     } catch (err) {
-      console.warn("Datei lesen für Sync:", err);
+      console.warn("Error reading file for sync:", err);
     }
   }
 
@@ -91,14 +91,13 @@ function startSyncToServer(filePath, downloadUrl) {
       if (debounceTimer) clearTimeout(debounceTimer);
       debounceTimer = setTimeout(uploadToServer, debounceMs);
     });
-    console.log(`Sync aktiv: Änderungen an der Datei werden nach MinIO geschrieben (${key})`);
+    console.log("Sync active, changes will be written to MinIO:", key);
   } catch (err) {
-    console.warn("Watcher konnte nicht gestartet werden:", err);
+    console.warn("Could not start watcher:", err);
   }
 }
 
 const server = http.createServer(async (req, res) => {
-  // CORS für Browser
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
@@ -125,7 +124,7 @@ const server = http.createServer(async (req, res) => {
             res.end(
               JSON.stringify({
                 ok: false,
-                message: "Feld 'url' im Request-Body fehlt oder ist ungültig.",
+                message: "Missing or invalid url in request body.",
               }),
             );
             return;
@@ -138,7 +137,7 @@ const server = http.createServer(async (req, res) => {
           res.writeHead(200, { "Content-Type": "application/json" });
           res.end(JSON.stringify({ ok: true }));
         } catch (error) {
-          console.error("Fehler beim Öffnen der Datei:", error);
+          console.error("Error opening file:", error);
           res.writeHead(500, { "Content-Type": "application/json" });
           res.end(
             JSON.stringify({
@@ -150,7 +149,7 @@ const server = http.createServer(async (req, res) => {
       });
       return;
     } catch (error) {
-      console.error("Fehler beim Verarbeiten der Anfrage:", error);
+      console.error("Error processing request:", error);
       res.writeHead(500, { "Content-Type": "application/json" });
       res.end(
         JSON.stringify({
@@ -167,7 +166,7 @@ const server = http.createServer(async (req, res) => {
 });
 
 server.listen(PORT, () => {
-  console.log(`Doc-Helper läuft auf http://localhost:${PORT}`);
+  console.log("Doc helper running at http://localhost:" + PORT);
 });
 
 
