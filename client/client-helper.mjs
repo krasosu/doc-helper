@@ -86,8 +86,11 @@ function startSyncToServer(filePath, downloadUrl) {
     }
   }
 
+  const dirPath = path.dirname(filePath);
+  const fileName = path.basename(filePath);
   try {
-    watch(filePath, (eventType, filename) => {
+    watch(dirPath, (eventType, filename) => {
+      if (filename != null && filename !== fileName) return;
       if (debounceTimer) clearTimeout(debounceTimer);
       debounceTimer = setTimeout(uploadToServer, debounceMs);
     });

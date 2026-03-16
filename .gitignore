@@ -30,7 +30,7 @@ Thumbs.db
 # Build artifacts
 *.tsbuildinfo
 
-# Package manager lock files (optional, falls du sie nicht committen möchtest)
+# Package manager lock files (uncomment if you don't want to commit them)
 # package-lock.json
 # yarn.lock
 # pnpm-lock.yaml

@@ -31,7 +31,13 @@ function sendFileFromMinIO(key, res) {
             Key: key,
         });
         const data = await s3Client.send(command);
-        const contentType = (_a = data.ContentType) !== null && _a !== void 0 ? _a : "application/octet-stream";
+        const contentType = (_a = data.ContentType) !== null && _a !== void 0 ? _a : (key.endsWith(".xml")
+            ? "application/xml"
+            : key.endsWith(".json")
+                ? "application/json"
+                : key.endsWith(".txt")
+                    ? "text/plain"
+                    : "application/octet-stream");
         res.setHeader("Content-Type", contentType);
         res.setHeader("Content-Disposition", `attachment; filename="${key}"`);
         const body = data.Body;
