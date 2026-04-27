@@ -11,31 +11,38 @@ Systems.
 
   ```json
   {
-    "url": "http://dein-server:3000/static/document.docx"
+    "key": "document.docx",
+    "downloadUrl": "http://dein-server:3000/static/document.docx",
+    "uploadUrl": "http://dein-server:3000/api/static/document.docx"
   }
   ```
 
-  oder
+  In Production kann `downloadUrl`/`uploadUrl` auch auf **pre-signed Ceph/S3 URLs**
+  zeigen (HTTPS inkl. Query-Parameter). `uploadUrl` ist optional, aber nötig, wenn
+  du automatische Uploads nach dem Speichern möchtest.
 
-  ```json
-  {
-    "url": "http://dein-server:3000/static/audio.wav"
-  }
-  ```
-
-- Die Web-App selbst holt diese Dateien typischerweise aus einem
-  S3-kompatiblen Storage (lokal: MinIO) und stellt sie unter `/static/...`
-  bereit.
+- Die Web-App liefert die Dateiliste über `/api/files`. In Dev wird MinIO genutzt,
+  in Prod kann ein presigned-Index verwendet werden.
 - Der Helper lädt die Datei von der angegebenen URL, speichert sie temporär
   mit passender Dateiendung und öffnet sie mit dem Standardprogramm:
   - Windows: `start`
   - Linux: `xdg-open`
   - macOS (falls verwendet): `open`
 
-- **Sync zurück nach MinIO:** Nach dem Öffnen beobachtet der Helper die
-  temporäre Datei. Speicherst du sie im Programm (z. B. Word), wird die
-  geänderte Datei nach einer kurzen Verzögerung (2 Sek.) automatisch per
-  `PUT /api/static/:key` an den Server geschickt und in MinIO überschrieben.
+- **Sync / Upload on save:** Nach dem Öffnen beobachtet der Helper die temporäre
+  Datei (über das Verzeichnis). Speichern im Programm löst nach kurzer Verzögerung
+  (2s) einen Upload aus:
+  - Wenn `uploadUrl` gesetzt ist: `PUT uploadUrl` (pre-signed upload)
+  - Sonst: `PUT http(s)://<server>/api/static/:key` (Dev/MinIO)
+
+### Corporate HTTPS certificates (Ceph)
+
+Wenn Ceph ein firmeneigenes TLS-Zertifikat nutzt, muss Node.js dem CA vertrauen:
+
+```bash
+export NODE_EXTRA_CA_CERTS=/path/to/company-ca.pem
+node client-helper.mjs
+```
 
 ### Start (Linux & Windows, mit installiertem Node.js)
 

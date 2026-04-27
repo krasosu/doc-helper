@@ -59,25 +59,31 @@ async function downloadDocument(urlString) {
   return filePath;
 }
 
-function startSyncToServer(filePath, downloadUrl) {
-  const urlObj = new URL(downloadUrl);
-  const baseUrl = urlObj.origin;
-  const key = urlObj.pathname.replace(/^\/static\/?/, "") || path.basename(filePath);
+function startSync(filePath, params) {
+  const downloadUrl = params.downloadUrl;
+  const key = params.key ?? path.basename(filePath);
+  const uploadUrl = params.uploadUrl;
 
   let debounceTimer = null;
   const debounceMs = 2000;
 
-  function uploadToServer() {
+  function upload() {
     try {
       const buffer = readFileSync(filePath);
-      const apiUrl = `${baseUrl}/api/static/${key}`;
-      fetch(apiUrl, {
+      const targetUrl = uploadUrl
+        ? uploadUrl
+        : (() => {
+            const baseUrl = new URL(downloadUrl).origin;
+            return `${baseUrl}/api/static/${key}`;
+          })();
+
+      fetch(targetUrl, {
         method: "PUT",
         body: buffer,
         headers: { "Content-Type": "application/octet-stream" },
       })
         .then((r) => {
-          if (r.ok) console.log("Synced to MinIO:", key);
+          if (r.ok) console.log("Synced:", key);
           else console.warn("Sync failed:", key, r.status);
         })
         .catch((err) => console.warn("Sync error:", err));
@@ -92,9 +98,9 @@ function startSyncToServer(filePath, downloadUrl) {
     watch(dirPath, (eventType, filename) => {
       if (filename != null && filename !== fileName) return;
       if (debounceTimer) clearTimeout(debounceTimer);
-      debounceTimer = setTimeout(uploadToServer, debounceMs);
+      debounceTimer = setTimeout(upload, debounceMs);
     });
-    console.log("Sync active, changes will be written to MinIO:", key);
+    console.log("Sync active:", key);
   } catch (err) {
     console.warn("Could not start watcher:", err);
   }
@@ -120,22 +126,29 @@ const server = http.createServer(async (req, res) => {
       req.on("end", async () => {
         try {
           const parsed = body ? JSON.parse(body) : {};
-          const url = parsed.url;
+          const downloadUrl =
+            typeof parsed.downloadUrl === "string"
+              ? parsed.downloadUrl
+              : typeof parsed.url === "string"
+                ? parsed.url
+                : "";
+          const uploadUrl = typeof parsed.uploadUrl === "string" ? parsed.uploadUrl : undefined;
+          const key = typeof parsed.key === "string" ? parsed.key : undefined;
 
-          if (!url || typeof url !== "string") {
+          if (!downloadUrl) {
             res.writeHead(400, { "Content-Type": "application/json" });
             res.end(
               JSON.stringify({
                 ok: false,
-                message: "Missing or invalid url in request body.",
+                message: "Missing or invalid downloadUrl in request body.",
               }),
             );
             return;
           }
 
-          const filePath = await downloadDocument(url);
+          const filePath = await downloadDocument(downloadUrl);
           openFileWithDefaultApp(filePath);
-          startSyncToServer(filePath, url);
+          startSync(filePath, { key, downloadUrl, uploadUrl });
 
           res.writeHead(200, { "Content-Type": "application/json" });
           res.end(JSON.stringify({ ok: true }));

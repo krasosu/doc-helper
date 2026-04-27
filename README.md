@@ -8,9 +8,9 @@ des Clients zu öffnen.
 
 ### Projektstruktur
 
-- `index.html` – UI mit zwei Buttons (Word & Audio)
+- `index.html` – UI (Dateiliste wird dynamisch geladen)
 - `src/main.ts` – Frontend-Logik (Kommunikation mit lokalem Helper + Fallback-Download)
-- `src/server.ts` – Express-Server, der die Web-App bereitstellt und Downloads aus S3/MinIO streamt
+- `src/server.ts` – Express-Server (Dev: MinIO/S3; Prod: optional presigned URLs)
 - `docker-compose.yml` – Startet Web-App + MinIO für lokale Entwicklung
 - `client/` – Client-Helper, der auf jedem Client-Rechner laufen kann
 
@@ -64,14 +64,53 @@ Dateien direkt aus MinIO.
 
 ### Nutzung im Browser
 
-Im Browser `http://<server>:3000` öffnen und einen der Buttons klicken:
-
-- „Word-Datei herunterladen“ → `document.docx`
-- „Audio (.wav) herunterladen“ → `audio.wav`
+Im Browser `http://<server>:3000` öffnen. Die UI lädt die Dateiliste aus
+`GET /api/files` und zeigt pro Objekt im Bucket einen Button an.
 
 Die Frontend-Logik versucht zuerst, die Datei über den lokalen Client-Helper
 automatisch zu öffnen. Falls dieser nicht erreichbar ist, wird der Browser
 Fallback genutzt (normaler Download).
+
+### Production (Ceph + presigned URLs, no S3 credentials in app)
+
+In Produktion kannst du den Server so konfigurieren, dass er **keine S3
+Credentials** benötigt und stattdessen eine Liste aus **pre-signed GET/PUT
+URLs** ausliefert.
+
+- Setze:
+  - `STORAGE_MODE=presigned`
+  - `PRESIGNED_FILES_JSON` **oder** `PRESIGNED_FILES_PATH`
+
+Format (Beispiel):
+
+```json
+{
+  "files": [
+    {
+      "key": "reports/example.xml",
+      "downloadUrl": "https://ceph.example.com/bucket/reports/example.xml?X-Amz-Algorithm=...&X-Amz-Signature=...",
+      "uploadUrl": "https://ceph.example.com/bucket/reports/example.xml?X-Amz-Algorithm=...&X-Amz-Signature=..."
+    }
+  ]
+}
+```
+
+- `downloadUrl`: pre-signed **GET** URL
+- `uploadUrl` (optional aber empfohlen): pre-signed **PUT** URL, damit der Client-Helper Änderungen nach dem Speichern wieder hochladen kann
+
+### Corporate HTTPS certificates (Ceph)
+
+Wenn Ceph ein firmeneigenes TLS-Zertifikat nutzt, müssen Server/Helper dem CA
+vertrauen.
+
+- **Node.js (Server/Helper):** setze `NODE_EXTRA_CA_CERTS` auf eine PEM-Datei mit
+  eurer CA-Chain:
+
+```bash
+export NODE_EXTRA_CA_CERTS=/path/to/company-ca.pem
+```
+
+Für Docker kannst du die Datei in den Container mounten und die Env-Variable setzen.
 
 ### Client-Helper
 
