@@ -7,19 +7,51 @@ Systems.
 ### Funktionsweise
 
 - Der Helper lauscht auf `http://localhost:17865/open-document`.
-- Die Web-Anwendung schickt einen `POST`-Request mit JSON-Body:
+- Die Web-Anwendung schickt einen `POST`-Request mit JSON-Body, z. B.:
 
   ```json
   {
+    "key": "document.docx",
     "url": "http://dein-server:3000/static/document.docx"
   }
   ```
 
-- Der Helper lädt die Datei von dieser URL herunter, speichert sie temporär
-  und öffnet sie mit dem Standardprogramm:
+  Optional geht auch die explizite Variante:
+
+  ```json
+  {
+    "key": "document.docx",
+    "downloadUrl": "http://dein-server:3000/static/document.docx",
+    "uploadUrl": "http://dein-server:3000/api/static/document.docx"
+  }
+  ```
+
+  In Production kann `url` (oder `downloadUrl`/`uploadUrl`) auch auf **Ceph**
+  zeigen (HTTPS inkl. Query-Parameter). Für Auto-Sync muss die URL einen Upload
+  per **PUT** erlauben.
+
+- Die Web-App liefert die Dateiliste über `/api/files`. In Dev wird MinIO genutzt,
+  in Prod kann ein presigned-Index verwendet werden.
+- Der Helper lädt die Datei von der angegebenen URL, speichert sie temporär
+  mit passender Dateiendung und öffnet sie mit dem Standardprogramm:
   - Windows: `start`
   - Linux: `xdg-open`
   - macOS (falls verwendet): `open`
+
+- **Sync / Upload on save:** Nach dem Öffnen beobachtet der Helper die temporäre
+  Datei (über das Verzeichnis). Speichern im Programm löst nach kurzer Verzögerung
+  (2s) einen Upload aus:
+  - Wenn `uploadUrl` gesetzt ist: `PUT uploadUrl`
+  - Sonst: `PUT url` bzw. `PUT downloadUrl`
+
+### Corporate HTTPS certificates (Ceph)
+
+Wenn Ceph ein firmeneigenes TLS-Zertifikat nutzt, muss Node.js dem CA vertrauen:
+
+```bash
+export NODE_EXTRA_CA_CERTS=/path/to/company-ca.pem
+node client-helper.mjs
+```
 
 ### Start (Linux & Windows, mit installiertem Node.js)
 
@@ -90,4 +122,29 @@ erforderlich.
    Solange dieses Fenster geöffnet bleibt, kann die Web-Anwendung den Helper
    nutzen und Dokumente lokal im Standardprogramm öffnen.
 
+---
+
+### Windows EXE + corporate HTTPS certificates (Ceph)
+
+Wenn Ceph firmeneigene TLS-Zertifikate nutzt, muss die EXE der CA vertrauen.
+Lege dazu die CA als PEM-Datei ab (z. B. `company-ca.pem`) und setze die
+Umgebungsvariable `NODE_EXTRA_CA_CERTS` beim Start.
+
+**Variante A (Batch-Datei, empfohlen für Weitergabe):**
+
+Erstelle `start-helper.bat` im gleichen Ordner wie `doc-helper.exe`:
+
+```bat
+@echo off
+set "NODE_EXTRA_CA_CERTS=%~dp0company-ca.pem"
+"%~dp0doc-helper.exe"
+pause
+```
+
+**Variante B (PowerShell):**
+
+```powershell
+$env:NODE_EXTRA_CA_CERTS="C:\path\to\company-ca.pem"
+.\doc-helper.exe
+```
 

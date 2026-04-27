@@ -1,40 +1,96 @@
-function setupDownloadButton() {
-  const button = document.getElementById("download-button") as
-    | HTMLButtonElement
-    | null;
+type FileEntry = {
+  key: string;
+  downloadUrl: string;
+  uploadUrl?: string;
+};
 
-  if (!button) {
-    console.warn("Download-Button mit ID 'download-button' wurde nicht gefunden.");
+function toAbsoluteUrl(url: string) {
+  if (url.startsWith("http://") || url.startsWith("https://")) return url;
+  if (url.startsWith("/")) return `${window.location.origin}${url}`;
+  return `${window.location.origin}/${url}`;
+}
+
+async function triggerHelperOrDownload(entry: FileEntry) {
+  const downloadUrl = toAbsoluteUrl(entry.downloadUrl);
+  const uploadUrl = toAbsoluteUrl(entry.uploadUrl ?? entry.downloadUrl);
+
+  try {
+    const response = await fetch("http://localhost:17865/open-document", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        key: entry.key,
+        downloadUrl,
+        uploadUrl,
+      }),
+    });
+
+    if (!response.ok) {
+      console.warn("Helper could not open file, falling back to download.");
+      const link = document.createElement("a");
+      link.href = downloadUrl;
+      link.download = "";
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+  } catch (error) {
+    console.warn("Helper not reachable, using normal download.", error);
+    const link = document.createElement("a");
+    link.href = downloadUrl;
+    link.download = "";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  }
+}
+
+function renderFileList(files: FileEntry[]) {
+  const container = document.getElementById("file-list");
+  const emptyEl = document.getElementById("file-list-empty");
+
+  if (!container) return;
+
+  container.innerHTML = "";
+
+  if (files.length === 0) {
+    if (emptyEl) emptyEl.style.display = "block";
     return;
   }
 
-  button.addEventListener("click", async () => {
-    try {
-      const documentUrl = `${window.location.origin}/static/document.docx`;
+  if (emptyEl) emptyEl.style.display = "none";
 
-      const response = await fetch("http://localhost:17865/open-document", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ url: documentUrl }),
-      });
-
-      if (!response.ok) {
-        console.error("Lokaler Helper konnte die Datei nicht öffnen.");
-        alert(
-          "Die Datei konnte lokal nicht geöffnet werden. Läuft der Client-Helper?",
-        );
-        return;
-      }
-    } catch (error) {
-      console.error("Fehler beim Aufruf des Client-Helpers:", error);
-      alert(
-        "Es ist ein Fehler beim Öffnen der Datei aufgetreten (Client-Helper nicht erreichbar?).",
-      );
+  files.forEach((entry, i) => {
+    if (i > 0) {
+      const spacer = document.createElement("div");
+      spacer.style.height = "0.75rem";
+      container.appendChild(spacer);
     }
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.textContent = entry.key;
+    btn.addEventListener("click", () => {
+      triggerHelperOrDownload(entry);
+    });
+    container.appendChild(btn);
   });
 }
 
-document.addEventListener("DOMContentLoaded", setupDownloadButton);
+async function loadFileList() {
+  const container = document.getElementById("file-list");
+  if (!container) return;
 
+  try {
+    const res = await fetch("/api/files");
+    const data = (await res.json()) as { files?: FileEntry[] };
+    const files = Array.isArray(data.files) ? data.files : [];
+    renderFileList(files);
+  } catch (error) {
+    console.error("Could not load file list:", error);
+    renderFileList([]);
+  }
+}
+
+document.addEventListener("DOMContentLoaded", loadFileList);

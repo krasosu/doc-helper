@@ -1,7 +1,7 @@
 const http = require("http");
 const https = require("https");
 const { spawn } = require("child_process");
-const { mkdtempSync, writeFileSync } = require("fs");
+const { mkdtempSync, writeFileSync, watch, readFileSync } = require("fs");
 const os = require("os");
 const path = require("path");
 
@@ -35,7 +35,7 @@ function downloadDocument(urlString) {
       if (res.statusCode && res.statusCode >= 400) {
         reject(
           new Error(
-            `Download fehlgeschlagen: ${res.statusCode} ${res.statusMessage || ""}`,
+            `Download failed: ${res.statusCode} ${res.statusMessage || ""}`,
           ),
         );
         return;
@@ -49,10 +49,90 @@ function downloadDocument(urlString) {
     req.on("error", reject);
   }).then((buffer) => {
     const tmpDir = mkdtempSync(path.join(os.tmpdir(), "doc-open-"));
-    const filePath = path.join(tmpDir, "document.docx");
+    const ext = path.extname(url.pathname) || ".bin";
+    const filePath = path.join(tmpDir, `download${ext}`);
     writeFileSync(filePath, buffer);
     return filePath;
   });
+}
+
+function startSync(filePath, params) {
+  const downloadUrl = params.downloadUrl;
+  const key = params.key || path.basename(filePath);
+  const uploadUrl = params.uploadUrl;
+
+  let debounceTimer = null;
+  const debounceMs = 2000;
+
+  function uploadBufferWithPut(targetUrl, buffer) {
+    const url = new URL(targetUrl);
+    const client = url.protocol === "https:" ? https : http;
+
+    return new Promise((resolve, reject) => {
+      const req = client.request(
+        url,
+        {
+          method: "PUT",
+          headers: {
+            "Content-Length": buffer.length,
+          },
+        },
+        (res) => {
+          const statusCode = res.statusCode || 0;
+          if (statusCode >= 200 && statusCode < 300) {
+            resolve(true);
+          } else {
+            reject(
+              new Error(
+                ("Upload failed: " +
+                  statusCode +
+                  " " +
+                  (res.statusMessage || "")).trim(),
+              ),
+            );
+          }
+        },
+      );
+      req.on("error", reject);
+      req.write(buffer);
+      req.end();
+    });
+  }
+
+  function upload() {
+    try {
+      const buffer = readFileSync(filePath);
+      const targetUrl = uploadUrl
+        ? uploadUrl
+        : (function () {
+            const baseUrl = new URL(downloadUrl).origin;
+            return baseUrl + "/api/static/" + key;
+          })();
+
+      uploadBufferWithPut(targetUrl, buffer)
+        .then(function () {
+          console.log("Synced:", key);
+        })
+        .catch(function (err) {
+          console.warn("Sync error:", err);
+        });
+    } catch (err) {
+      console.warn("Error reading file for sync:", err);
+    }
+  }
+
+  const dirPath = path.dirname(filePath);
+  const fileName = path.basename(filePath);
+  try {
+    watch(dirPath, function (eventType, filename) {
+      if (filename != null && filename !== fileName) return;
+      if (debounceTimer) clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(upload, debounceMs);
+    });
+    console.log("Sync active:", key);
+  } catch (err) {
+    console.warn("Could not start watcher:", err);
+  }
 }
 
 const server = http.createServer((req, res) => {
@@ -74,27 +154,36 @@ const server = http.createServer((req, res) => {
     req.on("end", () => {
       try {
         const parsed = body ? JSON.parse(body) : {};
-        const url = parsed.url;
+        const downloadUrl =
+          typeof parsed.downloadUrl === "string"
+            ? parsed.downloadUrl
+            : typeof parsed.url === "string"
+              ? parsed.url
+              : "";
+        const uploadUrl =
+          typeof parsed.uploadUrl === "string" ? parsed.uploadUrl : undefined;
+        const key = typeof parsed.key === "string" ? parsed.key : undefined;
 
-        if (!url || typeof url !== "string") {
+        if (!downloadUrl) {
           res.writeHead(400, { "Content-Type": "application/json" });
           res.end(
             JSON.stringify({
               ok: false,
-              message: "Feld 'url' im Request-Body fehlt oder ist ungültig.",
+              message: "Missing or invalid downloadUrl in request body.",
             }),
           );
           return;
         }
 
-        downloadDocument(url)
+        downloadDocument(downloadUrl)
           .then((filePath) => {
             openFileWithDefaultApp(filePath);
+            startSync(filePath, { key, downloadUrl, uploadUrl });
             res.writeHead(200, { "Content-Type": "application/json" });
             res.end(JSON.stringify({ ok: true }));
           })
           .catch((error) => {
-            console.error("Fehler beim Öffnen der Datei:", error);
+            console.error("Error opening file:", error);
             res.writeHead(500, { "Content-Type": "application/json" });
             res.end(
               JSON.stringify({
@@ -104,7 +193,7 @@ const server = http.createServer((req, res) => {
             );
           });
       } catch (error) {
-        console.error("Fehler beim Verarbeiten der Anfrage:", error);
+        console.error("Error processing request:", error);
         res.writeHead(500, { "Content-Type": "application/json" });
         res.end(
           JSON.stringify({
@@ -122,6 +211,6 @@ const server = http.createServer((req, res) => {
 });
 
 server.listen(PORT, () => {
-  console.log(`Doc-Helper läuft auf http://localhost:${PORT}`);
+  console.log("Doc helper running at http://localhost:" + PORT);
 });
 
