@@ -71,11 +71,15 @@ Die Frontend-Logik versucht zuerst, die Datei über den lokalen Client-Helper
 automatisch zu öffnen. Falls dieser nicht erreichbar ist, wird der Browser
 Fallback genutzt (normaler Download).
 
-### Production (Ceph + presigned URLs, no S3 credentials in app)
+### Production (presigned URLs, no S3 credentials in app)
 
 In Produktion kannst du den Server so konfigurieren, dass er **keine S3
 Credentials** benötigt und stattdessen eine Liste aus **pre-signed GET/PUT
 URLs** ausliefert.
+
+- **Wichtig:** Die pre-signed URLs müssen von einem separaten Service/Backend
+  erzeugt werden (typischerweise mit S3/Ceph Credentials). Diese App konsumiert
+  nur die fertige Liste.
 
 - Setze:
   - `STORAGE_MODE=presigned`
@@ -88,19 +92,23 @@ Format (Beispiel):
   "files": [
     {
       "key": "reports/example.xml",
-      "downloadUrl": "https://ceph.example.com/bucket/reports/example.xml?X-Amz-Algorithm=...&X-Amz-Signature=...",
-      "uploadUrl": "https://ceph.example.com/bucket/reports/example.xml?X-Amz-Algorithm=...&X-Amz-Signature=..."
+      "url": "https://ceph.example.com/bucket/reports/example.xml?..."
     }
   ]
 }
 ```
 
-- `downloadUrl`: pre-signed **GET** URL
-- `uploadUrl` (optional aber empfohlen): pre-signed **PUT** URL, damit der Client-Helper Änderungen nach dem Speichern wieder hochladen kann
+- `url`: URL zum Objekt. Diese wird fürs Öffnen (GET) und für Sync-Uploads (PUT)
+  wiederverwendet. Wenn ihr strikt presigned URLs nutzt, muss diese URL dafür
+  geeignet sein (z. B. explizit für PUT signiert oder von eurem Backend so
+  bereitgestellt, dass GET+PUT funktionieren).
 
-### Corporate HTTPS certificates (Ceph)
+Optional kannst du weiterhin `downloadUrl`/`uploadUrl` angeben; wenn `uploadUrl`
+fehlt, wird `url` bzw. `downloadUrl` als Upload-URL verwendet.
 
-Wenn Ceph ein firmeneigenes TLS-Zertifikat nutzt, müssen Server/Helper dem CA
+### Corporate HTTPS certificates
+
+Wenn firmeneigene TLS-Zertifikat genutzt werden, müssen Server/Helper dem CA
 vertrauen.
 
 - **Node.js (Server/Helper):** setze `NODE_EXTRA_CA_CERTS` auf eine PEM-Datei mit
@@ -111,6 +119,23 @@ export NODE_EXTRA_CA_CERTS=/path/to/company-ca.pem
 ```
 
 Für Docker kannst du die Datei in den Container mounten und die Env-Variable setzen.
+
+Beispiel (Docker run):
+
+```bash
+docker run --rm -p 3000:3000 \
+  -e NODE_EXTRA_CA_CERTS=/certs/company-ca.pem \
+  -v "$(pwd)/certs/company-ca.pem:/certs/company-ca.pem:ro" \
+  simple-download-app
+```
+
+### Windows helper EXE + corporate CA
+
+Die Windows-EXE wird wie gewohnt gebaut (siehe `client/README.md`). Damit sie
+HTTPS zu Ceph mit firmeneigenen Zertifikaten akzeptiert, starte sie mit
+gesetztem `NODE_EXTRA_CA_CERTS` (Pfad zu eurer CA-PEM-Datei).
+
+Beispiele findest du in `client/README.md` (Batch/PowerShell).
 
 ### Client-Helper
 

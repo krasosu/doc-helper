@@ -12,7 +12,7 @@ function toAbsoluteUrl(url: string) {
 
 async function triggerHelperOrDownload(entry: FileEntry) {
   const downloadUrl = toAbsoluteUrl(entry.downloadUrl);
-  const uploadUrl = entry.uploadUrl ? toAbsoluteUrl(entry.uploadUrl) : undefined;
+  const uploadUrl = toAbsoluteUrl(entry.uploadUrl ?? entry.downloadUrl);
 
   try {
     const response = await fetch("http://localhost:17865/open-document", {

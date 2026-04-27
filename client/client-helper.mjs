@@ -67,6 +67,38 @@ function startSync(filePath, params) {
   let debounceTimer = null;
   const debounceMs = 2000;
 
+  function uploadBufferWithPut(targetUrl, buffer) {
+    const url = new URL(targetUrl);
+    const client = url.protocol === "https:" ? https : http;
+
+    return new Promise((resolve, reject) => {
+      const req = client.request(
+        url,
+        {
+          method: "PUT",
+          headers: {
+            "Content-Length": buffer.length,
+          },
+        },
+        (res) => {
+          const statusCode = res.statusCode ?? 0;
+          if (statusCode >= 200 && statusCode < 300) {
+            resolve(true);
+          } else {
+            reject(
+              new Error(
+                `Upload failed: ${statusCode} ${res.statusMessage ?? ""}`.trim(),
+              ),
+            );
+          }
+        },
+      );
+      req.on("error", reject);
+      req.write(buffer);
+      req.end();
+    });
+  }
+
   function upload() {
     try {
       const buffer = readFileSync(filePath);
@@ -77,15 +109,8 @@ function startSync(filePath, params) {
             return `${baseUrl}/api/static/${key}`;
           })();
 
-      fetch(targetUrl, {
-        method: "PUT",
-        body: buffer,
-        headers: { "Content-Type": "application/octet-stream" },
-      })
-        .then((r) => {
-          if (r.ok) console.log("Synced:", key);
-          else console.warn("Sync failed:", key, r.status);
-        })
+      uploadBufferWithPut(targetUrl, buffer)
+        .then(() => console.log("Synced:", key))
         .catch((err) => console.warn("Sync error:", err));
     } catch (err) {
       console.warn("Error reading file for sync:", err);

@@ -130,10 +130,16 @@ async function loadPresignedFileEntries(): Promise<FileEntry[]> {
       if (!item || typeof item !== "object") return null;
       const rec = item as Record<string, unknown>;
       const key = typeof rec.key === "string" ? rec.key : "";
-      const downloadUrl = typeof rec.downloadUrl === "string" ? rec.downloadUrl : "";
-      const uploadUrl = typeof rec.uploadUrl === "string" ? rec.uploadUrl : undefined;
-      if (!key || !downloadUrl) return null;
-      return { key, downloadUrl, uploadUrl };
+      const url =
+        typeof rec.url === "string"
+          ? rec.url
+          : typeof rec.downloadUrl === "string"
+            ? rec.downloadUrl
+            : "";
+      const uploadUrl =
+        typeof rec.uploadUrl === "string" ? rec.uploadUrl : undefined;
+      if (!key || !url) return null;
+      return { key, downloadUrl: url, uploadUrl: uploadUrl ?? url };
     })
     .filter((x): x is FileEntry => x !== null);
 }

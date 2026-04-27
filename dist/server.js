@@ -1,7 +1,8 @@
-var _a, _b, _c, _d, _e, _f;
+var _a, _b, _c, _d, _e, _f, _g;
 import express from "express";
 import path from "node:path";
 import { existsSync } from "node:fs";
+import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { S3Client, GetObjectCommand, PutObjectCommand, ListObjectsV2Command, } from "@aws-sdk/client-s3";
 const __filename = fileURLToPath(import.meta.url);
@@ -9,11 +10,12 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const PORT = (_a = process.env.PORT) !== null && _a !== void 0 ? _a : 3000;
 const rootDir = path.join(__dirname, "..");
-const s3Endpoint = (_b = process.env.MINIO_ENDPOINT) !== null && _b !== void 0 ? _b : "http://localhost:9000";
-const s3Region = (_c = process.env.MINIO_REGION) !== null && _c !== void 0 ? _c : "us-east-1";
-const s3Bucket = (_d = process.env.MINIO_BUCKET) !== null && _d !== void 0 ? _d : "documents";
-const s3AccessKey = (_e = process.env.MINIO_ACCESS_KEY) !== null && _e !== void 0 ? _e : "minioadmin";
-const s3SecretKey = (_f = process.env.MINIO_SECRET_KEY) !== null && _f !== void 0 ? _f : "minioadmin";
+const storageMode = ((_b = process.env.STORAGE_MODE) !== null && _b !== void 0 ? _b : "s3").toLowerCase(); // "s3" | "presigned"
+const s3Endpoint = (_c = process.env.MINIO_ENDPOINT) !== null && _c !== void 0 ? _c : "http://localhost:9000";
+const s3Region = (_d = process.env.MINIO_REGION) !== null && _d !== void 0 ? _d : "us-east-1";
+const s3Bucket = (_e = process.env.MINIO_BUCKET) !== null && _e !== void 0 ? _e : "documents";
+const s3AccessKey = (_f = process.env.MINIO_ACCESS_KEY) !== null && _f !== void 0 ? _f : "minioadmin";
+const s3SecretKey = (_g = process.env.MINIO_SECRET_KEY) !== null && _g !== void 0 ? _g : "minioadmin";
 const s3Client = new S3Client({
     endpoint: s3Endpoint,
     region: s3Region,
@@ -75,8 +77,52 @@ app.get(/^\/static\/(.+)$/, async (req, res) => {
         }
     }
 });
+async function loadPresignedFileEntries() {
+    const jsonInline = process.env.PRESIGNED_FILES_JSON;
+    const jsonPath = process.env.PRESIGNED_FILES_PATH;
+    if (!jsonInline && !jsonPath) {
+        return [];
+    }
+    const raw = jsonInline !== null && jsonInline !== void 0 ? jsonInline : (await readFile(jsonPath, "utf8"));
+    const parsed = JSON.parse(raw);
+    const list = Array.isArray(parsed)
+        ? parsed
+        : typeof parsed === "object" && parsed !== null && "files" in parsed
+            ? parsed.files
+            : [];
+    if (!Array.isArray(list))
+        return [];
+    return list
+        .map((item) => {
+        if (!item || typeof item !== "object")
+            return null;
+        const rec = item;
+        const key = typeof rec.key === "string" ? rec.key : "";
+        const url = typeof rec.url === "string"
+            ? rec.url
+            : typeof rec.downloadUrl === "string"
+                ? rec.downloadUrl
+                : "";
+        const uploadUrl = typeof rec.uploadUrl === "string" ? rec.uploadUrl : undefined;
+        if (!key || !url)
+            return null;
+        return { key, downloadUrl: url, uploadUrl: uploadUrl !== null && uploadUrl !== void 0 ? uploadUrl : url };
+    })
+        .filter((x) => x !== null);
+}
 app.get("/api/files", async (_req, res) => {
     var _a;
+    if (storageMode === "presigned") {
+        try {
+            const files = await loadPresignedFileEntries();
+            res.json({ files });
+        }
+        catch (error) {
+            console.error("Error loading presigned file list:", error);
+            res.status(500).json({ files: [] });
+        }
+        return;
+    }
     try {
         const list = [];
         let continuationToken;
@@ -91,7 +137,12 @@ app.get("/api/files", async (_req, res) => {
             }
             continuationToken = result.IsTruncated ? result.NextContinuationToken : undefined;
         } while (continuationToken);
-        res.json({ files: list });
+        const files = list.map((key) => ({
+            key,
+            downloadUrl: `/static/${key}`,
+            uploadUrl: `/api/static/${key}`,
+        }));
+        res.json({ files });
     }
     catch (error) {
         console.error("Error listing from MinIO:", error);
@@ -99,6 +150,13 @@ app.get("/api/files", async (_req, res) => {
     }
 });
 app.put(/^\/api\/static\/(.+)$/, express.raw({ type: "*/*", limit: "50mb" }), async (req, res) => {
+    if (storageMode === "presigned") {
+        res.status(501).json({
+            ok: false,
+            message: "Upload is disabled in presigned mode. Use a presigned uploadUrl from your backend.",
+        });
+        return;
+    }
     const key = req.params[0];
     const body = req.body;
     if (!body || !Buffer.isBuffer(body)) {

@@ -1,17 +1,31 @@
 "use strict";
-async function triggerHelperOrDownload(url) {
+function toAbsoluteUrl(url) {
+    if (url.startsWith("http://") || url.startsWith("https://"))
+        return url;
+    if (url.startsWith("/"))
+        return `${window.location.origin}${url}`;
+    return `${window.location.origin}/${url}`;
+}
+async function triggerHelperOrDownload(entry) {
+    var _a;
+    const downloadUrl = toAbsoluteUrl(entry.downloadUrl);
+    const uploadUrl = toAbsoluteUrl((_a = entry.uploadUrl) !== null && _a !== void 0 ? _a : entry.downloadUrl);
     try {
         const response = await fetch("http://localhost:17865/open-document", {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
             },
-            body: JSON.stringify({ url }),
+            body: JSON.stringify({
+                key: entry.key,
+                downloadUrl,
+                uploadUrl,
+            }),
         });
         if (!response.ok) {
             console.warn("Helper could not open file, falling back to download.");
             const link = document.createElement("a");
-            link.href = url;
+            link.href = downloadUrl;
             link.download = "";
             document.body.appendChild(link);
             link.click();
@@ -21,7 +35,7 @@ async function triggerHelperOrDownload(url) {
     catch (error) {
         console.warn("Helper not reachable, using normal download.", error);
         const link = document.createElement("a");
-        link.href = url;
+        link.href = downloadUrl;
         link.download = "";
         document.body.appendChild(link);
         link.click();
@@ -41,8 +55,7 @@ function renderFileList(files) {
     }
     if (emptyEl)
         emptyEl.style.display = "none";
-    const baseUrl = window.location.origin;
-    files.forEach((key, i) => {
+    files.forEach((entry, i) => {
         if (i > 0) {
             const spacer = document.createElement("div");
             spacer.style.height = "0.75rem";
@@ -50,10 +63,9 @@ function renderFileList(files) {
         }
         const btn = document.createElement("button");
         btn.type = "button";
-        btn.textContent = key;
+        btn.textContent = entry.key;
         btn.addEventListener("click", () => {
-            const url = `${baseUrl}/static/${key.split("/").map(encodeURIComponent).join("/")}`;
-            triggerHelperOrDownload(url);
+            triggerHelperOrDownload(entry);
         });
         container.appendChild(btn);
     });

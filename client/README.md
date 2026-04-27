@@ -12,14 +12,23 @@ Systems.
   ```json
   {
     "key": "document.docx",
+    "url": "http://dein-server:3000/static/document.docx"
+  }
+  ```
+
+  Optional geht auch die explizite Variante:
+
+  ```json
+  {
+    "key": "document.docx",
     "downloadUrl": "http://dein-server:3000/static/document.docx",
     "uploadUrl": "http://dein-server:3000/api/static/document.docx"
   }
   ```
 
-  In Production kann `downloadUrl`/`uploadUrl` auch auf **pre-signed Ceph/S3 URLs**
-  zeigen (HTTPS inkl. Query-Parameter). `uploadUrl` ist optional, aber nötig, wenn
-  du automatische Uploads nach dem Speichern möchtest.
+  In Production kann `url` (oder `downloadUrl`/`uploadUrl`) auch auf **Ceph**
+  zeigen (HTTPS inkl. Query-Parameter). Für Auto-Sync muss die URL einen Upload
+  per **PUT** erlauben.
 
 - Die Web-App liefert die Dateiliste über `/api/files`. In Dev wird MinIO genutzt,
   in Prod kann ein presigned-Index verwendet werden.
@@ -32,8 +41,8 @@ Systems.
 - **Sync / Upload on save:** Nach dem Öffnen beobachtet der Helper die temporäre
   Datei (über das Verzeichnis). Speichern im Programm löst nach kurzer Verzögerung
   (2s) einen Upload aus:
-  - Wenn `uploadUrl` gesetzt ist: `PUT uploadUrl` (pre-signed upload)
-  - Sonst: `PUT http(s)://<server>/api/static/:key` (Dev/MinIO)
+  - Wenn `uploadUrl` gesetzt ist: `PUT uploadUrl`
+  - Sonst: `PUT url` bzw. `PUT downloadUrl`
 
 ### Corporate HTTPS certificates (Ceph)
 
@@ -112,4 +121,30 @@ erforderlich.
 
    Solange dieses Fenster geöffnet bleibt, kann die Web-Anwendung den Helper
    nutzen und Dokumente lokal im Standardprogramm öffnen.
+
+---
+
+### Windows EXE + corporate HTTPS certificates (Ceph)
+
+Wenn Ceph firmeneigene TLS-Zertifikate nutzt, muss die EXE der CA vertrauen.
+Lege dazu die CA als PEM-Datei ab (z. B. `company-ca.pem`) und setze die
+Umgebungsvariable `NODE_EXTRA_CA_CERTS` beim Start.
+
+**Variante A (Batch-Datei, empfohlen für Weitergabe):**
+
+Erstelle `start-helper.bat` im gleichen Ordner wie `doc-helper.exe`:
+
+```bat
+@echo off
+set "NODE_EXTRA_CA_CERTS=%~dp0company-ca.pem"
+"%~dp0doc-helper.exe"
+pause
+```
+
+**Variante B (PowerShell):**
+
+```powershell
+$env:NODE_EXTRA_CA_CERTS="C:\path\to\company-ca.pem"
+.\doc-helper.exe
+```
 
