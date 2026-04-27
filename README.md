@@ -78,7 +78,7 @@ Credentials** benötigt und stattdessen eine Liste aus **pre-signed GET/PUT
 URLs** ausliefert.
 
 - **Wichtig:** Die pre-signed URLs müssen von einem separaten Service/Backend
-  erzeugt werden (typischerweise mit S3/Ceph Credentials). Diese App konsumiert
+  erzeugt werden (typischerweise mit S3 credentials). Diese App konsumiert
   nur die fertige Liste.
 
 - Setze:
@@ -92,7 +92,7 @@ Format (Beispiel):
   "files": [
     {
       "key": "reports/example.xml",
-      "url": "https://ceph.example.com/bucket/reports/example.xml?..."
+      "url": "https://s3.example.com/bucket/reports/example.xml?..."
     }
   ]
 }
@@ -132,7 +132,7 @@ docker run --rm -p 3000:3000 \
 ### Windows helper EXE + corporate CA
 
 Die Windows-EXE wird wie gewohnt gebaut (siehe `client/README.md`). Damit sie
-HTTPS zu Ceph mit firmeneigenen Zertifikaten akzeptiert, starte sie mit
+HTTPS zu S3/S3-compatible storage mit firmeneigenen Zertifikaten akzeptiert, starte sie mit
 gesetztem `NODE_EXTRA_CA_CERTS` (Pfad zu eurer CA-PEM-Datei).
 
 Beispiele findest du in `client/README.md` (Batch/PowerShell).

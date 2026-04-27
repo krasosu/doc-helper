@@ -26,7 +26,7 @@ Systems.
   }
   ```
 
-  In Production kann `url` (oder `downloadUrl`/`uploadUrl`) auch auf **Ceph**
+  In Production kann `url` (oder `downloadUrl`/`uploadUrl`) auch auf **S3**
   zeigen (HTTPS inkl. Query-Parameter). Für Auto-Sync muss die URL einen Upload
   per **PUT** erlauben.
 
@@ -44,9 +44,9 @@ Systems.
   - Wenn `uploadUrl` gesetzt ist: `PUT uploadUrl`
   - Sonst: `PUT url` bzw. `PUT downloadUrl`
 
-### Corporate HTTPS certificates (Ceph)
+### Corporate HTTPS certificates (S3)
 
-Wenn Ceph ein firmeneigenes TLS-Zertifikat nutzt, muss Node.js dem CA vertrauen:
+Wenn S3/S3-compatible storage ein firmeneigenes TLS-Zertifikat nutzt, muss Node.js dem CA vertrauen:
 
 ```bash
 export NODE_EXTRA_CA_CERTS=/path/to/company-ca.pem
@@ -124,9 +124,9 @@ erforderlich.
 
 ---
 
-### Windows EXE + corporate HTTPS certificates (Ceph)
+### Windows EXE + corporate HTTPS certificates (S3)
 
-Wenn Ceph firmeneigene TLS-Zertifikate nutzt, muss die EXE der CA vertrauen.
+Wenn S3/S3-compatible storage firmeneigene TLS-Zertifikate nutzt, muss die EXE der CA vertrauen.
 Lege dazu die CA als PEM-Datei ab (z. B. `company-ca.pem`) und setze die
 Umgebungsvariable `NODE_EXTRA_CA_CERTS` beim Start.
 
